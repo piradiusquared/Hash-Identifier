@@ -6,7 +6,7 @@ Simple hash function identifier.
 
 import argparse
 from dataclasses import dataclass
-from typing import List, Literal, Optional
+from typing import Literal
 from rich.table import Table
 from rich.console import Console
 
@@ -18,8 +18,9 @@ class HashCandidate:
     confidence: Confidence
     reason:     str
 
-_PREFIX_LIST = [
-    ("$argon2id$", "Argon2id", "..."),
+_PREFIX_LIST: list[tuple[str, str, str]] = [
+    ("$argon2id$", "Argon2id", "Modern PHC standard."),
+    ("$argon2i$", "Argon2i", "PHC string, side channel resistant variant"),
     ("$2b$", "bcrypt", "..."),
     ("$1$", "MD5 crypt", "..."),
     ("$5$", "SHA-256 crypt", "..."),
@@ -27,45 +28,37 @@ _PREFIX_LIST = [
     ("apr1", "Apache MD5 crypt", "...")
 ]
 
-_HEX_LENGTH_RULES = {
+_HEX_LENGTH_RULES: dict[int, list[str]] = {
+    16: ["MYSQL323", "CRC-64"],
     32: ["MD5", "NTLM", "MD4", "RIPEMD-128"],
     40: ["SHA-1", "RIPEMD-160", "FSB-160", "HAS-160"],
     64: ["SHA-256", "SHA3-256", "BLAKE2s-256", "RIPEMD-256", "Streebog-256", "FSB-256"],
     128: ["SHA-256", "SHA3-256", "BLAKE2b-512", "Whirlpool", "Streebog-512", "FSB-512"]
 }
 
-HEX_CHARSET = frozenset(["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "a", "b", "c", "d", "e", "f"])
-_HEX_UPPER_CHARSET = frozenset(["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B", "C", "D", "E", "F"])
+HEX_CHARSET: frozenset = frozenset("0123456789abcdef")
+_HEX_UPPER_CHARSET: frozenset = frozenset("0123456789ABCDEF")
 
 
 def _is_hex(text: str) -> bool:
-    for char in text:
-        if char not in HEX_CHARSET or char not in _HEX_UPPER_CHARSET:
-            return False
-    return True
+    return bool(text) and all(c in HEX_CHARSET or c in _HEX_UPPER_CHARSET for c in text)
 
 def _is_mysql5(text: str) -> bool:
     if len(text) != 41 or text[0] != "*":
         return False
-    for char in text[1::]:
-        if char not in _HEX_UPPER_CHARSET:
-            return False
-    for i, char in enumerate(text):
-        if i == 0 and char != "*":
-            return False
-        if i > 0 and not char.isalnum():
-            return False
-        if i > 40:
-            return False
-    return True
+    return all(c in _HEX_UPPER_CHARSET for c in text[1:])
 
 def _is_descrypt(text: str) -> bool:
     if len(text) != 13 or text[0:2] != "./":
         return False
-    return text[2::].isalnum()
+    return text[2:].isalnum()
 
-def identify(text: str) -> Optional[List[HashCandidate]]:
-
+def identify(raw_input: str) -> list[HashCandidate]:
+    # sanity check
+    text = raw_input.strip()
+    if not text:
+        return []
+    
     # go through prefix table. iterate -> use startswith. high
     for tup in _PREFIX_LIST:
         if text.startswith(tup[0]):
@@ -96,8 +89,6 @@ def identify(text: str) -> Optional[List[HashCandidate]]:
             if char == "$":
                 return [HashCandidate(text[1:i + 1], "low", "Generic PHC prefix found.")]
 
-
-
     # other shape hints? JWT: "eyJ", base64? low, return "not a hash"
     if text.startswith("eyJ"): # JWT support for now
         return [HashCandidate("JWT", "low", "JSON Web Token. Not a hash")]
@@ -114,7 +105,7 @@ def _build_argument_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _render_table(raw_input: any, candidates: List[HashCandidate], console: Console) -> None:
+def _render_table(raw_input: any, candidates: list[HashCandidate], console: Console) -> None:
     table = Table(title=f"top-N candidates for {raw_input}")
 
     table.add_column("Algorithm", justify="center")
@@ -140,3 +131,7 @@ def _render_table(raw_input: any, candidates: List[HashCandidate], console: Cons
 
 # if __name__ == "__main__":
 #     sys.exit(main())
+
+test = frozenset("01234")
+if "0" in test:
+    print("true")
