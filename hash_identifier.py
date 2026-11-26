@@ -5,9 +5,8 @@ Simple hash function identifier.
 """
 
 import argparse
-import sys
 from dataclasses import dataclass
-from typing import Literal
+from typing import List, Literal, Optional
 
 Confidence = Literal["high", "medium", "low"]
 
@@ -22,14 +21,14 @@ _PREFIX_LIST = [
     ("$2b$", "bcrypt", "..."),
     ("$1$", "MD5 crypt", "..."),
     ("$5$", "SHA-256 crypt", "..."),
-    ("$6$", "SHA-512 crypt"),
-    ("apr1", "Apache MD5 crypt")
+    ("$6$", "SHA-512 crypt", "..."),
+    ("apr1", "Apache MD5 crypt", "...")
 ]
 
 _HEX_LENGTH_RULES = {
     32: ["MD5", "NTLM", "MD4", "RIPEMD-128"],
     40: ["SHA-1", "RIPEMD-160", "FSB-160", "HAS-160"],
-    64: ["BLAKE2s-256", "SHA-256", "SHA3-256", "RIPEMD-256", "Streebog-256", "FSB-256"],
+    64: ["SHA-256", "SHA3-256", "BLAKE2s-256", "RIPEMD-256", "Streebog-256", "FSB-256"],
     128: ["SHA-256", "SHA3-256", "BLAKE2b-512", "Whirlpool", "Streebog-512", "FSB-512"]
 }
 
@@ -63,14 +62,37 @@ def _is_descrypt(text: str) -> bool:
         return False
     return text[2::].isalnum()
 
+def identify(text: str) -> Optional[List[HashCandidate]]:
+
+    # go through prefix table. iterate -> use startswith. high
+    for tup in _PREFIX_LIST:
+        if text.startswith(tup[0]):
+            return HashCandidate(tup[1], "high", tup[2])
+    
+
+    # call helper functions shape hints is_mysql5 and is_descrypt. high/medium
+    if _is_mysql5(text):
+        return HashCandidate("MYSQL5", "high", "Matching MYSQL5 structure. *[40 upper hex chars]")
+    if _is_descrypt(text):
+        return HashCandidate("DES-crypt", "high", "Matching DES-crypt structure. ./[13 hex chars]")
+
+    # pure hex? look up length. medium/low, as returns a list
+    if _is_hex(text):
+        if _HEX_LENGTH_RULES.get(len(text)):
+            return _HEX_LENGTH_RULES[len(text)]
+
+    # phc fallback, prefix something like $xxx$... low, generic hash
+
+    # other shape hints? JWT: "eyJ", base64? low, return "not a hash"
+
+    print("Hash could not be identified")
+    return [] # nothing found
+     
+
+
 
 # def main() -> None:
-#     parse = argparse.ArgumentParser(description="Hash identifier")
-#     parse.add_argument("hash", help="Write hash after")
-
-#     args = parse.parse_args()
-#     pass
-
+#    pass
 
 # if __name__ == "__main__":
 #     sys.exit(main())
