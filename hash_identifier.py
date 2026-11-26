@@ -7,6 +7,8 @@ Simple hash function identifier.
 import argparse
 from dataclasses import dataclass
 from typing import List, Literal, Optional
+from rich.table import Table
+from rich.console import Console
 
 Confidence = Literal["high", "medium", "low"]
 
@@ -69,26 +71,33 @@ def identify(text: str) -> Optional[List[HashCandidate]]:
         if text.startswith(tup[0]):
             return HashCandidate(tup[1], "high", tup[2])
     
-
     # call helper functions shape hints is_mysql5 and is_descrypt. high/medium
     if _is_mysql5(text):
-        return HashCandidate("MYSQL5", "high", "Matching MYSQL5 structure. *[40 upper hex chars]")
+        return [HashCandidate("MYSQL5", "high", "Matching MYSQL5 structure. *[40 upper hex chars]")]
     if _is_descrypt(text):
-        return HashCandidate("DES-crypt", "high", "Matching DES-crypt structure. ./[13 hex chars]")
+        return [HashCandidate("DES-crypt", "high", "Matching DES-crypt structure. ./[13 hex chars]")]
+    if "::" in text:
+        return [HashCandidate("NetNTLM", "medium", "Matching colon structure `::`.")]
 
     # pure hex? look up length. medium/low, as returns a list
     if _is_hex(text):
-        if _HEX_LENGTH_RULES.get(len(text)):
-            return _HEX_LENGTH_RULES[len(text)]
+        length = len(text)
+        if _HEX_LENGTH_RULES.get(length):
+            out = []
+            out.append(HashCandidate(_HEX_LENGTH_RULES[length][0], "medium", f"{length} hex chars - most likely"))
+            for entry in _HEX_LENGTH_RULES[length]:
+                out.append[HashCandidate(entry, "low", f"{length} hex chars - also possible")]
+            return _HEX_LENGTH_RULES[length]
 
-    # phc fallback, prefix something like $xxx$... low, generic hash
+    # phc fallback, prefix something like $xxx$... low, generic hash. More emphasis on this
+    
 
     # other shape hints? JWT: "eyJ", base64? low, return "not a hash"
-
+    if text.startswith("eyJ"): # JWT support for now
+        return [HashCandidate("JWT", "medium", "JSON Web Token. Not a hash")]
+    
     print("Hash could not be identified")
     return [] # nothing found
-     
-
 
 
 # def main() -> None:
