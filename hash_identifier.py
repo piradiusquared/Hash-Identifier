@@ -90,15 +90,50 @@ def identify(text: str) -> Optional[List[HashCandidate]]:
             return _HEX_LENGTH_RULES[length]
 
     # phc fallback, prefix something like $xxx$... low, generic hash. More emphasis on this
-    
+    # initial version. brute force check
+    if text[0] == "$":
+        for i, char in enumerate(text[1::]):
+            if char == "$":
+                return [HashCandidate(text[1:i + 1], "low", "Generic PHC prefix found.")]
+
+
 
     # other shape hints? JWT: "eyJ", base64? low, return "not a hash"
     if text.startswith("eyJ"): # JWT support for now
-        return [HashCandidate("JWT", "medium", "JSON Web Token. Not a hash")]
+        return [HashCandidate("JWT", "low", "JSON Web Token. Not a hash")]
     
     print("Hash could not be identified")
     return [] # nothing found
 
+
+def _build_argument_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(id="hashid", description="Hash arg parser")
+    parser.add_argument("hash", help="Add hash after")
+    parser.add_argument("-n", "--top", help="Top n results")
+
+    return parser
+
+
+def _render_table(raw_input: any, candidates: List[HashCandidate], console: Console) -> None:
+    table = Table(title=f"top-N candidates for {raw_input}")
+
+    table.add_column("Algorithm", justify="center")
+    table.add_column("Reason", no_wrap=True)
+    table.add_column("Confidence")
+
+    for entry in candidates:
+        colour = None
+        # should be enforced as one of these
+        if entry.confidence == "high":
+            colour = "green"
+        elif entry.confidence == "medium":
+            colour = "yellow"
+        elif entry.confidence == "low":
+            colour = "red"
+
+        table.add_row(entry.algorithm, entry.reason, entry.confidence, style=colour)
+
+    console.print(table)
 
 # def main() -> None:
 #    pass
