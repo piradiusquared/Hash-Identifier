@@ -21,19 +21,27 @@ class HashCandidate:
 _PREFIX_LIST: list[tuple[str, str, str]] = [
     ("$argon2id$", "Argon2id", "Modern PHC standard."),
     ("$argon2i$", "Argon2i", "PHC string, side channel resistant variant"),
+
     ("$2b$", "bcrypt", "..."),
+    # add other bcrypt
+
     ("$1$", "MD5 crypt", "..."),
     ("$5$", "SHA-256 crypt", "..."),
     ("$6$", "SHA-512 crypt", "..."),
+    {"$y$", "Yescrypt", "..."},
     ("apr1", "Apache MD5 crypt", "...")
 ]
 
 _HEX_LENGTH_RULES: dict[int, list[str]] = {
     16: ["MYSQL323", "CRC-64"],
     32: ["MD5", "NTLM", "MD4", "RIPEMD-128"],
-    40: ["SHA-1", "RIPEMD-160", "FSB-160", "HAS-160"],
-    64: ["SHA-256", "SHA3-256", "BLAKE2s-256", "RIPEMD-256", "Streebog-256", "FSB-256"],
-    128: ["SHA-256", "SHA3-256", "BLAKE2b-512", "Whirlpool", "Streebog-512", "FSB-512"]
+    40: ["SHA-1", "RIPEMD-160"],
+    48: ["Tiger-192"],
+    56: ["SHA-224", "SHA3-224"],
+    64: ["SHA-256", "SHA3-256", "BLAKE2s-256", "RIPEMD-256"],
+    80: ["RIPEMD-320"],
+    96: ["SHA-384", "SHA3-384"],
+    128: ["SHA-256", "SHA3-256", "BLAKE2b-512", "Whirlpool"]
 }
 
 HEX_CHARSET: frozenset = frozenset("0123456789abcdef")
