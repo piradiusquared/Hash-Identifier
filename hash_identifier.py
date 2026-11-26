@@ -5,6 +5,7 @@ Simple hash function identifier.
 """
 
 import argparse
+import sys
 from dataclasses import dataclass
 from typing import Literal
 from rich.table import Table
@@ -70,14 +71,14 @@ def identify(raw_input: str) -> list[HashCandidate]:
     # go through prefix table. iterate -> use startswith. high
     for tup in _PREFIX_LIST:
         if text.startswith(tup[0]):
-            return HashCandidate(tup[1], "high", tup[2])
+            return [HashCandidate(tup[1], "high", tup[2])]
     
     # call helper functions shape hints is_mysql5 and is_descrypt. high/medium
     if _is_mysql5(text):
         return [HashCandidate("MYSQL5", "high", "Matching MYSQL5 structure. *[40 upper hex chars]")]
     if _is_descrypt(text):
         return [HashCandidate("DES-crypt", "high", "Matching DES-crypt structure. ./[13 hex chars]")]
-    if "::" in text:
+    if "::" in text: # more specific
         return [HashCandidate("NetNTLM", "medium", "Matching colon structure `::`.")]
 
     # pure hex? look up length. medium/low, as returns a list
@@ -88,7 +89,7 @@ def identify(raw_input: str) -> list[HashCandidate]:
             out.append(HashCandidate(_HEX_LENGTH_RULES[length][0], "medium", f"{length} hex chars - most likely"))
             for entry in _HEX_LENGTH_RULES[length]:
                 out.append[HashCandidate(entry, "low", f"{length} hex chars - also possible")]
-            return _HEX_LENGTH_RULES[length]
+            return out
 
     # phc fallback, prefix something like $xxx$... low, generic hash. More emphasis on this
     # initial version. brute force check
@@ -106,9 +107,9 @@ def identify(raw_input: str) -> list[HashCandidate]:
 
 
 def _build_argument_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(id="hashid", description="Hash arg parser")
+    parser = argparse.ArgumentParser(prog="hashid", description="Hash arg parser")
     parser.add_argument("hash", help="Add hash after")
-    parser.add_argument("-n", "--top", help="Top n results")
+    parser.add_argument("--top", "-n", type=int, default=5, help="Top n results")
 
     return parser
 
@@ -122,6 +123,7 @@ def _render_table(raw_input: any, candidates: list[HashCandidate], console: Cons
 
     for entry in candidates:
         colour = None
+        # refactor to dictionary mapping each to colour
         # should be enforced as one of these
         if entry.confidence == "high":
             colour = "green"
@@ -134,12 +136,25 @@ def _render_table(raw_input: any, candidates: list[HashCandidate], console: Cons
 
     console.print(table)
 
-# def main() -> None:
-#    pass
+def main() -> None:
+    parser = _build_argument_parser()
+    args = parser.parse_args()
+    console = Console()
 
-# if __name__ == "__main__":
-#     sys.exit(main())
+    candidates = identify(args.hash)
 
-test = frozenset("01234")
-if "0" in test:
-    print("true")
+    if not candidates:
+        console.print("[red]No identification found [/red]...")
+        return 1
+    
+    top_n = candidates[:args.top]
+    _render_table(args.hash, top_n, console)
+
+    if top_n[0].confidence == "high":
+        console.print("\n[dim]Next step: try the matching cracker ...[/dim]")
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
