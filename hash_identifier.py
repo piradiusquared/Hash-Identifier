@@ -19,18 +19,18 @@ class HashCandidate:
     confidence: Confidence
     reason:     str
 
-_PREFIX_LIST: list[tuple[str, str, str]] = [
-    ("$argon2id$", "Argon2id", "Modern PHC standard."),
-    ("$argon2i$", "Argon2i", "PHC string, side channel resistant variant"),
+_PREFIX_LIST: list[list[str, str, str]] = [
+    ["$argon2id$", "Argon2id", "Modern PHC standard."],
+    ["$argon2i$", "Argon2i", "PHC string, side channel resistant variant"],
 
-    ("$2b$", "bcrypt", "..."),
+    ["$2b$", "bcrypt", "..."],
     # add other bcrypt
 
-    ("$1$", "MD5 crypt", "..."),
-    ("$5$", "SHA-256 crypt", "..."),
-    ("$6$", "SHA-512 crypt", "..."),
-    {"$y$", "Yescrypt", "..."},
-    ("apr1", "Apache MD5 crypt", "...")
+    ["$1$", "MD5 crypt", "..."],
+    ["$5$", "SHA-256 crypt", "..."],
+    ["$6$", "SHA-512 crypt", "..."],
+    ["$y$", "Yescrypt", "..."],
+    ["apr1", "Apache MD5 crypt", "..."]
 ]
 
 _HEX_LENGTH_RULES: dict[int, list[str]] = {
@@ -79,7 +79,14 @@ def identify(raw_input: str) -> list[HashCandidate]:
     if _is_descrypt(text):
         return [HashCandidate("DES-crypt", "high", "Matching DES-crypt structure. ./[13 hex chars]")]
     if "::" in text: # more specific
-        return [HashCandidate("NetNTLM", "medium", "Matching colon structure `::`.")]
+        netlm = (text.split("::"))[-1]
+        subs = netlm.split(":")
+        if len(subs) == 4:
+            if len(subs[1]) == 48 and len(subs[2]) == 48 and len(subs[3]) == 16:
+                return [HashCandidate("NetNTLMv1", "medium", "Matching colon structure :: and has LM, NT, server challenge.")]
+            if len(subs[1]) == 16 and len(subs[2]) == 32:
+                return [HashCandidate("NetNTLMv2", "medium", "Matching colon structure ::, has server challenge, NT proof, and challenge blob.")]
+            
 
     # pure hex? look up length. medium/low, as returns a list
     if _is_hex(text):
@@ -88,7 +95,7 @@ def identify(raw_input: str) -> list[HashCandidate]:
             out = []
             out.append(HashCandidate(_HEX_LENGTH_RULES[length][0], "medium", f"{length} hex chars - most likely"))
             for entry in _HEX_LENGTH_RULES[length]:
-                out.append[HashCandidate(entry, "low", f"{length} hex chars - also possible")]
+                out.append(HashCandidate(entry, "low", f"{length} hex chars - also possible"))
             return out
 
     # phc fallback, prefix something like $xxx$... low, generic hash. More emphasis on this
@@ -118,21 +125,17 @@ def _render_table(raw_input: any, candidates: list[HashCandidate], console: Cons
     table = Table(title=f"top-N candidates for {raw_input}")
 
     table.add_column("Algorithm", justify="center")
-    table.add_column("Reason", no_wrap=True)
+    table.add_column("Reason")
     table.add_column("Confidence")
 
-    for entry in candidates:
-        colour = None
-        # refactor to dictionary mapping each to colour
-        # should be enforced as one of these
-        if entry.confidence == "high":
-            colour = "green"
-        elif entry.confidence == "medium":
-            colour = "yellow"
-        elif entry.confidence == "low":
-            colour = "red"
+    colours: dict[Confidence, str] = {
+        "low": "red",
+        "medium": "yellow",
+        "high": "green"
+    }
 
-        table.add_row(entry.algorithm, entry.reason, entry.confidence, style=colour)
+    for entry in candidates:
+        table.add_row(entry.algorithm, entry.reason, entry.confidence, style=colours[entry.confidence])
 
     console.print(table)
 
